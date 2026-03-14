@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RFID Attendance System</title>
+  <meta name="description" content="Smart IoT RFID Student Attendance Management Portal with ESP32 and SMS notifications." />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app">
+
+  <!-- ── Header ───────────────────────────────────────────── -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-icon">📡</div>
+        <span class="logo-text">RFID <span>Attendance</span></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:0.75rem;">
+        <!-- Admin status badge -->
+        <span id="admin-badge" class="admin-badge view-only" title="View-only mode — click Admin Login to manage students">
+          👁 View Only
+        </span>
+        <button id="admin-login-btn" class="btn btn-sm btn-ghost" onclick="openAdminModal()" title="Log in as admin">🔑 Admin Login</button>
+        <button id="admin-logout-btn" class="btn btn-sm btn-ghost" onclick="adminLogout()" title="Log out" style="display:none;">🚪 Logout</button>
+        <div class="header-time" id="header-clock">--:--:-- AM</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Navigation Tabs ───────────────────────────────────── -->
+  <nav class="nav-tabs" role="tablist">
+    <div class="nav-tabs-inner">
+      <button class="tab-btn active" data-tab="dashboard" role="tab" id="tab-dashboard">
+        <span class="tab-icon">📊</span> Dashboard
+      </button>
+      <button class="tab-btn" data-tab="attendance" role="tab" id="tab-attendance">
+        <span class="tab-icon">📋</span> Attendance
+      </button>
+      <button class="tab-btn" data-tab="students" role="tab" id="tab-students">
+        <span class="tab-icon">👨‍🎓</span> Students
+        <span class="badge" id="badge-students">0</span>
+      </button>
+      <button class="tab-btn" data-tab="absent" role="tab" id="tab-absent">
+        <span class="tab-icon">⚠️</span> Absent Today
+        <span class="badge danger" id="badge-absent">0</span>
+      </button>
+      <button class="tab-btn" data-tab="notify" role="tab" id="tab-notify">
+        <span class="tab-icon">📱</span> SMS Alerts
+      </button>
+    </div>
+  </nav>
+
+  <!-- ── Main Content ──────────────────────────────────────── -->
+  <main class="main">
+
+    <!-- ══════════════ DASHBOARD TAB ══════════════ -->
+    <div class="tab-panel active" id="panel-dashboard" role="tabpanel">
+      <h1 class="section-title">Dashboard</h1>
+
+      <!-- Stat Cards -->
+      <div class="stats-grid">
+        <div class="stat-card present">
+          <div class="stat-icon">✅</div>
+          <div class="stat-value" id="stat-present">—</div>
+          <div class="stat-label">Present Today</div>
+        </div>
+        <div class="stat-card absent">
+          <div class="stat-icon">❌</div>
+          <div class="stat-value" id="stat-absent">—</div>
+          <div class="stat-label">Absent Today</div>
+        </div>
+        <div class="stat-card total">
+          <div class="stat-icon">👥</div>
+          <div class="stat-value" id="stat-total">—</div>
+          <div class="stat-label">Total Students</div>
+        </div>
+        <div class="stat-card date">
+          <div class="stat-icon">📅</div>
+          <div class="stat-value" id="stat-date" style="font-size:1.25rem;">—</div>
+          <div class="stat-label">Today's Date</div>
+        </div>
+      </div>
+
+      <!-- Live Scan Widget -->
+      <div class="scan-widget">
+        <div class="scan-pulse">📛</div>
+        <div class="scan-title">Live Attendance Monitoring</div>
+        <div class="scan-sub">ESP32 is scanning — tap a card to mark attendance</div>
+      </div>
+
+      <!-- Last Scan Result -->
+      <div class="last-scan hidden" id="last-scan">
+        <div class="ls-icon" id="ls-icon">✅</div>
+        <div>
+          <div class="ls-name" id="ls-name">—</div>
+          <div class="ls-detail" id="ls-detail">—</div>
+        </div>
+      </div>
+
+      <!-- Today's Attendance Table -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">📋 Today's Attendance</div>
+          <button class="btn btn-ghost btn-sm" onclick="loadTodayAttendance()">🔄 Refresh</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Student Name</th>
+                <th>Roll No.</th>
+                <th>Class</th>
+                <th>Scan Time</th>
+              </tr>
+            </thead>
+            <tbody id="today-table-body">
+              <tr><td colspan="5"><div class="empty-state"><div class="es-icon">📭</div><p>Loading…</p></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ ATTENDANCE TAB ══════════════ -->
+    <div class="tab-panel" id="panel-attendance" role="tabpanel">
+      <h2 class="section-title">Attendance Records</h2>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="date-row">
+            <input type="date" id="att-date" />
+            <button class="btn btn-primary btn-sm" onclick="loadAttendanceByDate()">🔍 View</button>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇️ Export CSV</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Student Name</th>
+                <th>Roll No.</th>
+                <th>Class</th>
+                <th>UID</th>
+                <th>Scan Time</th>
+              </tr>
+            </thead>
+            <tbody id="att-table-body">
+              <tr><td colspan="6"><div class="empty-state"><div class="es-icon">📅</div><p>Select a date above to view records.</p></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ STUDENTS TAB ══════════════ -->
+    <div class="tab-panel" id="panel-students" role="tabpanel">
+      <h2 class="section-title">Student &amp; Card Management</h2>
+
+      <!-- Add Student Form — shown only to admin -->
+      <div class="panel" id="add-student-panel">
+        <div class="panel-header">
+          <div class="panel-title">➕ Register New Student / RFID Card</div>
+        </div>
+        <!-- View-only notice (hidden for admin) -->
+        <div id="admin-required-notice" class="admin-notice" style="display:none;">
+          <span>🔒</span>
+          <span>You need to <button class="link-btn" onclick="openAdminModal()">log in as admin</button> to register or remove students.</span>
+        </div>
+        <form id="add-student-form" onsubmit="addStudent(event)">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="f-uid">Card UID *</label>
+              <input id="f-uid" type="text" placeholder="e.g. A1B2C3D4" required autocomplete="off" />
+            </div>
+            <div class="form-group">
+              <label for="f-name">Full Name *</label>
+              <input id="f-name" type="text" placeholder="John Doe" required />
+            </div>
+            <div class="form-group">
+              <label for="f-roll">Roll Number *</label>
+              <input id="f-roll" type="text" placeholder="2024001" required />
+            </div>
+            <div class="form-group">
+              <label for="f-class">Class / Section *</label>
+              <input id="f-class" type="text" placeholder="10-A" required />
+            </div>
+            <div class="form-group">
+              <label for="f-phone">Student Phone *</label>
+              <input id="f-phone" type="tel" placeholder="+919876543210" required />
+            </div>
+            <div class="form-group">
+              <label for="f-parent">Parent Phone (for SMS) *</label>
+              <input id="f-parent" type="tel" placeholder="+919876543210" required />
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary" id="add-btn">
+            ➕ Register Student
+          </button>
+        </form>
+      </div>
+
+      <!-- Students Table -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">👨‍🎓 Registered Students</div>
+          <button class="btn btn-ghost btn-sm" onclick="loadStudents()">🔄 Refresh</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Roll No.</th>
+                <th>Class</th>
+                <th>Card UID</th>
+                <th>Parent Phone</th>
+                <th>Registered</th>
+                <th id="action-col-header">Action</th>
+              </tr>
+            </thead>
+            <tbody id="students-table-body">
+              <tr><td colspan="8"><div class="empty-state"><div class="es-icon">📭</div><p>Loading…</p></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ ABSENT TAB ══════════════ -->
+    <div class="tab-panel" id="panel-absent" role="tabpanel">
+      <h2 class="section-title">Absent Students Today</h2>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">⚠️ Not Yet Marked</div>
+          <button class="btn btn-ghost btn-sm" onclick="loadAbsent()">🔄 Refresh</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Roll No.</th>
+                <th>Class</th>
+                <th>Card UID</th>
+                <th>Parent Phone</th>
+              </tr>
+            </thead>
+            <tbody id="absent-table-body">
+              <tr><td colspan="6"><div class="empty-state"><div class="es-icon">📭</div><p>Loading…</p></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ SMS ALERTS TAB ══════════════ -->
+    <div class="tab-panel" id="panel-notify" role="tabpanel">
+      <h2 class="section-title">SMS Notifications</h2>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">📱 Manual Absent Notification</div>
+        </div>
+        <p style="color:var(--text-secondary);font-size:0.875rem;margin-bottom:1.25rem;">
+          Click the button to immediately send an SMS alert to all parents whose child has not marked attendance today.
+          The system also sends this automatically every day at the configured time.
+        </p>
+        <!-- Admin-only notice for SMS -->
+        <div id="sms-admin-notice" class="admin-notice" style="display:none;">
+          <span>🔒</span>
+          <span>You need to <button class="link-btn" onclick="openAdminModal()">log in as admin</button> to send SMS notifications.</span>
+        </div>
+        <button class="btn btn-success" id="notify-btn" onclick="triggerNotification()">
+          📤 Send SMS to All Absent Students' Parents
+        </button>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">📝 Notification Log</div>
+          <button class="btn btn-ghost btn-sm" onclick="clearLog()">🗑 Clear</button>
+        </div>
+        <div class="notif-log" id="notif-log">
+          <div class="log-line info">[System] Ready. Logs will appear here when notifications are sent…</div>
+        </div>
+      </div>
+
+      <!-- SMS Info -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">⚙️ Twilio Configuration</div>
+        </div>
+        <p style="color:var(--text-secondary);font-size:0.875rem;margin-bottom:0.75rem;">
+          Configure these in the <code style="background:var(--bg-glass2);padding:2px 6px;border-radius:4px;">.env</code>
+          file inside the <code style="background:var(--bg-glass2);padding:2px 6px;border-radius:4px;">backend/</code> folder:
+        </p>
+        <div style="background:var(--bg-glass);border:1px solid var(--border);border-radius:var(--radius-sm);padding:1rem;font-family:monospace;font-size:0.8rem;color:#93c5fd;">
+          TWILIO_ACCOUNT_SID=ACxxxx…<br>
+          TWILIO_AUTH_TOKEN=xxxxxx…<br>
+          TWILIO_PHONE_NUMBER=+1xxxxxxx<br>
+          NOTIFY_TIME=18:00<br>
+          SMS_ENABLED=true
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ── Admin Login Modal ──────────────────────────────────── -->
+<div class="modal-overlay" id="admin-modal" onclick="closeAdminModalIfBg(event)">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">🔑 Admin Login</span>
+      <button class="modal-close" onclick="closeAdminModal()" title="Close">✕</button>
+    </div>
+    <p class="modal-desc">Enter your Admin Key to unlock student management and SMS controls.</p>
+    <div class="form-group">
+      <label for="admin-key-input">Admin Key</label>
+      <input id="admin-key-input" type="password" placeholder="Enter admin key…" autocomplete="off"
+             onkeydown="if(event.key==='Enter') submitAdminKey()" />
+    </div>
+    <div id="admin-key-error" style="color:#f87171;font-size:0.8rem;margin-top:0.25rem;display:none;">
+      ❌ Incorrect admin key. Please try again.
+    </div>
+    <div style="display:flex;gap:0.75rem;margin-top:1.25rem;">
+      <button class="btn btn-primary" onclick="submitAdminKey()" id="modal-submit-btn">Unlock Admin</button>
+      <button class="btn btn-ghost" onclick="closeAdminModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

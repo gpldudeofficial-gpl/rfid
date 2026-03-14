@@ -1,0 +1,5 @@
+node_modules/
+.env
+backend/db.json
+backend/local.db
+*.db

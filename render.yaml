@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: rfid-attendance
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: TURSO_DATABASE_URL
+        sync: false        # set manually in Render dashboard
+      - key: TURSO_AUTH_TOKEN
+        sync: false        # set manually in Render dashboard
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_PHONE_NUMBER
+        sync: false
+      - key: SMS_ENABLED
+        value: "true"
+      - key: NOTIFY_TIME
+        value: "18:00"
+      - key: DEVICE_KEY
+        sync: false        # share this with your ESP32 operators (e.g. friend in Delhi)
+      - key: ADMIN_KEY
+        sync: false        # keep this private — enter in portal Admin Login
