@@ -25,14 +25,29 @@ if (SMS_ENABLED !== 'false' && TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
 }
 
 /**
+ * Normalize an Indian phone number to E.164 format (+91XXXXXXXXXX).
+ * Handles: 10-digit, 91XXXXXXXXXX, +91XXXXXXXXXX
+ * @param {string} phone
+ * @returns {string}
+ */
+function normalizePhone(phone) {
+  let p = String(phone).replace(/\s+/g, '').replace(/-/g, '');
+  if (p.startsWith('+')) return p;           // already E.164
+  if (p.startsWith('91') && p.length === 12) return '+' + p;  // 91XXXXXXXXXX
+  if (p.length === 10) return '+91' + p;     // bare 10-digit Indian number
+  return '+' + p;                            // fallback — just prepend +
+}
+
+/**
  * Send an absence notification to a student's parent phone.
  * @param {string} studentName
  * @param {string} rollNo
  * @param {string} studentClass
- * @param {string} parentPhone  - E.164 format e.g. +919876543210
+ * @param {string} parentPhone  - any format, auto-normalized to E.164
  * @returns {Promise<{success: boolean, sid?: string, error?: string}>}
  */
 async function sendAbsentNotification(studentName, rollNo, studentClass, parentPhone) {
+  parentPhone = normalizePhone(parentPhone);
   const today = new Date().toLocaleDateString('en-IN', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
   });
